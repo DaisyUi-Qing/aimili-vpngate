@@ -760,13 +760,14 @@ def getch():
     try:
         old_settings = termios.tcgetattr(fd)
     except termios.error:
-        return sys.stdin.read(1)
+        ch = sys.stdin.read(1)
+        return ch if ch else "q"
     try:
         tty.setraw(sys.stdin.fileno())
         ch = sys.stdin.read(1)
     finally:
         termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-    return ch
+    return ch if ch else "q"
 
 def getch_timeout(timeout=1.0):
     import select

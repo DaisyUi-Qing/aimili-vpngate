@@ -667,6 +667,9 @@ def openvpn_command(config_file: str, route_nopull: bool, dev: str = "tun0") -> 
 
     command.extend(["--verb", "3"])
     
+    if os.path.exists("/etc/ssl/certs"):
+        command.extend(["--capath", "/etc/ssl/certs"])
+    
     try:
         content = Path(config_file).read_text(encoding="utf-8", errors="replace")
         if vpn_utils.is_config_tcp(content):
@@ -1052,7 +1055,7 @@ def test_multiple_nodes(node_ids: list[str]) -> list[dict[str, Any]]:
         return temp_node
 
     updated_nodes_map = {}
-    max_workers = min(30, max(1, len(to_test)))
+    max_workers = min(5, max(1, len(to_test)))
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {executor.submit(test_worker, (idx, n)): n["id"] for idx, n in enumerate(to_test)}
         for future in concurrent.futures.as_completed(futures):
@@ -1120,18 +1123,19 @@ def auto_switch_node(attempt: int = 0) -> None:
                 if n.get("country") == target_country 
                 or vpn_utils.COUNTRY_TRANSLATIONS.get(n.get("country", ""), n.get("country", "")) == target_country
             ]
+        routing_ip_type = ui_cfg.get("routing_ip_type", "all")
         if routing_mode == "favorites":
             fav_ids = set(ui_cfg.get("favorite_node_ids", []))
             fav_candidates = [n for n in candidates if n.get("id") in fav_ids]
             if fav_candidates:
                 candidates = fav_candidates
+                routing_ip_type = "all"
             else:
                 fav_fail_fallback = ui_cfg.get("fav_fail_fallback", True)
                 if not fav_fail_fallback:
                     candidates = []
             
         # Apply routing_ip_type filter
-        routing_ip_type = ui_cfg.get("routing_ip_type", "all")
         if routing_ip_type == "residential":
             candidates = [n for n in candidates if n.get("ip_type") in ("residential", "mobile")]
         elif routing_ip_type == "hosting":
@@ -1414,6 +1418,7 @@ def maintain_valid_nodes(force: bool = False) -> str:
                     target_country = ui_cfg.get("force_country", "")
                     
                     if routing_mode != "fixed_ip":
+                        routing_ip_type = ui_cfg.get("routing_ip_type", "all")
                         available_candidates = [n for n in merged if n.get("probe_status") == "available"]
                         if routing_mode == "fixed_region" and target_country:
                             available_candidates = [
@@ -1426,13 +1431,11 @@ def maintain_valid_nodes(force: bool = False) -> str:
                             fav_candidates = [n for n in available_candidates if n.get("id") in fav_ids]
                             if fav_candidates:
                                 available_candidates = fav_candidates
+                                routing_ip_type = "all"
                             else:
                                 fav_fail_fallback = ui_cfg.get("fav_fail_fallback", True)
                                 if not fav_fail_fallback:
                                     available_candidates = []
-                        
-                        # Apply routing_ip_type filter for auto-connect
-                        routing_ip_type = ui_cfg.get("routing_ip_type", "all")
                         if routing_ip_type == "residential":
                             available_candidates = [n for n in available_candidates if n.get("ip_type") in ("residential", "mobile")]
                         elif routing_ip_type == "hosting":
